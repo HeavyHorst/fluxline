@@ -17,7 +17,7 @@ Not thread safe. If the struct is modified elsewhere concurrently, one would nee
 ## Get the code
 
 ```bash
-go get github.com/DCSO/fluxline
+go get github.com/HeavyHorst/fluxline
 ```
 
 ## Usage example
@@ -30,7 +30,7 @@ import (
   "fmt"
   "log"
 
-  "github.com/DCSO/fluxline"
+  "github.com/HeavyHorst/fluxline"
 )
 
 const measurement = "example"
