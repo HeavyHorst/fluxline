@@ -10,8 +10,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/ShowMax/go-fqdn"
 )
 
 // Encoder represents a component that encapsulates a target environment for
@@ -51,8 +49,7 @@ func toInfluxRepr(tag string, val interface{}, nostatictypes bool) (string, erro
 	}
 }
 
-func recordFields(val interface{},
-	fieldSet map[string]string, nostatictypes bool) (map[string]string, error) {
+func recordFields(val interface{}, fieldSet map[string]string, nostatictypes bool) (map[string]string, error) {
 	t := reflect.TypeOf(val)
 	v := reflect.ValueOf(val)
 
@@ -71,8 +68,7 @@ func recordFields(val interface{},
 	return fieldSet, nil
 }
 
-func (a *Encoder) formatLineProtocol(prefix string,
-	tags map[string]string, fieldSet map[string]string) string {
+func (a *Encoder) formatLineProtocol(prefix string, tags map[string]string, fieldSet map[string]string, ts time.Time) string {
 	out := ""
 	tagstr := ""
 
@@ -110,52 +106,62 @@ func (a *Encoder) formatLineProtocol(prefix string,
 		return ""
 	}
 
+	t := ts
+	if ts.IsZero() {
+		t = time.Now()
+	}
+
 	// construct line protocol string
 	return fmt.Sprintf("%s,host=%s%s %s %d\n", prefix, a.host,
-		tagstr, out, uint64(time.Now().UnixNano()))
+		tagstr, out, uint64(t.UnixNano()))
 }
 
 // Encode writes the line protocol representation for a given measurement
 // name, data struct and tag map to the io.Writer specified on encoder creation.
-func (a *Encoder) encodeGeneric(prefix string, val interface{},
-	tags map[string]string, nostatictypes bool) error {
+func (a *Encoder) encodeGeneric(prefix string, val interface{}, tags map[string]string, nostatictypes bool, opts ...Option) error {
+	var ops options
+	for _, o := range opts {
+		o(&ops)
+	}
+
 	fieldSet := make(map[string]string)
 	fieldSet, err := recordFields(val, fieldSet, nostatictypes)
 	if err != nil {
 		return err
 	}
-	_, err = a.Writer.Write([]byte(a.formatLineProtocol(prefix, tags, fieldSet)))
+	_, err = a.Writer.Write([]byte(a.formatLineProtocol(prefix, tags, fieldSet, ops.time)))
 	return err
 }
 
 // Encode writes the line protocol representation for a given measurement
 // name, data struct and tag map to the io.Writer specified on encoder creation.
-func (a *Encoder) Encode(prefix string, val interface{},
-	tags map[string]string) error {
-	return a.encodeGeneric(prefix, val, tags, false)
+func (a *Encoder) Encode(prefix string, val interface{}, tags map[string]string, opts ...Option) error {
+	return a.encodeGeneric(prefix, val, tags, false, opts...)
 }
 
 // EncodeWithoutTypes writes the line protocol representation for a given measurement
 // name, data struct and tag map to the io.Writer specified on encoder creation.
 // In contrast to Encode(), this method never appends type suffixes to values.
-func (a *Encoder) EncodeWithoutTypes(prefix string, val interface{},
-	tags map[string]string) error {
-	return a.encodeGeneric(prefix, val, tags, true)
+func (a *Encoder) EncodeWithoutTypes(prefix string, val interface{}, tags map[string]string, opts ...Option) error {
+	return a.encodeGeneric(prefix, val, tags, true, opts...)
 }
 
 // EncodeMap writes the line protocol representation for a given measurement
 // name, field value map and tag map to the io.Writer specified on encoder
 // creation.
-func (a *Encoder) EncodeMap(prefix string, val map[string]string,
-	tags map[string]string) error {
-	_, err := a.Writer.Write([]byte(a.formatLineProtocol(prefix, tags, val)))
+func (a *Encoder) EncodeMap(prefix string, val map[string]string, tags map[string]string, opts ...Option) error {
+	var ops options
+	for _, o := range opts {
+		o(&ops)
+	}
+	_, err := a.Writer.Write([]byte(a.formatLineProtocol(prefix, tags, val, ops.time)))
 	return err
 }
 
 // NewEncoder creates a new encoder that writes to the given io.Writer.
 func NewEncoder(w io.Writer) *Encoder {
 	a := &Encoder{
-		host:   fqdn.Get(),
+		host:   getFQDN(),
 		Writer: w,
 	}
 	return a
