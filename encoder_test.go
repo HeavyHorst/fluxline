@@ -32,6 +32,17 @@ var testStruct = struct {
 	TestFloat:   1.29e-24,
 }
 
+var testMap = map[string]interface{}{
+	"testval":        1,
+	"testvalue":      2,
+	"testvalue2":     -3,
+	"testvalue3":     `foobar"baz`,
+	"testvaluetime":  time.Now(),
+	"testvaluebool":  false,
+	"testvalueflt32": float32(math.Pi),
+	"testvalueflt64": 1.29e-24,
+}
+
 var testStructInvalidType = struct {
 	TestVal  uint64    `influx:"testval"`
 	TestVal2 uint64    `influx:"testvalue"`
@@ -77,6 +88,29 @@ func TestEncoderEncoder(t *testing.T) {
 	tags["foo"] = "bar"
 	tags["baaz gogo"] = "gu,gu"
 	err := ile.Encode("mytool", testStruct, tags)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out := b.String()
+	if len(out) == 0 {
+		t.Fatalf("unexpected result length: %d == 0", len(out))
+	}
+
+	if match, _ := regexp.Match(`^mytool,host=[^,]+,baaz\\ gogo=gu\\,gu,foo=bar testval=1i,testvalue=2i,testvalue2=-3i,testvalue3=\"foobar\\\"baz\",testvaluebool=false,testvalueflt32=3.1415927,testvalueflt64=1.29e-24,testvaluetime=`, []byte(out)); !match {
+		t.Fatalf("unexpected match content: %s", out)
+	}
+}
+
+func TestEncoderEncodeMap(t *testing.T) {
+	var b bytes.Buffer
+
+	ile := NewEncoder(&b)
+	tags := make(map[string]string)
+	tags["foo"] = "bar"
+	tags["baaz gogo"] = "gu,gu"
+
+	err := ile.EncodeMap("mytool", testMap, tags)
 	if err != nil {
 		t.Fatal(err)
 	}

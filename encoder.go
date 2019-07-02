@@ -15,8 +15,8 @@ import (
 // Encoder represents a component that encapsulates a target environment for
 // measurement submissions, as given by hostname and receiving writer.
 type Encoder struct {
-	host   string
-	Writer io.Writer
+	host string
+	io.Writer
 }
 
 func escapeSpecialChars(in string) string {
@@ -52,6 +52,10 @@ func toInfluxRepr(tag string, val interface{}, nostatictypes bool) (string, erro
 func recordFields(val interface{}, fieldSet map[string]string, nostatictypes bool) (map[string]string, error) {
 	t := reflect.TypeOf(val)
 	v := reflect.ValueOf(val)
+
+	if t.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("val needs to be a struct")
+	}
 
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
@@ -129,7 +133,7 @@ func (a *Encoder) encodeGeneric(prefix string, val interface{}, tags map[string]
 	if err != nil {
 		return err
 	}
-	_, err = a.Writer.Write([]byte(a.formatLineProtocol(prefix, tags, fieldSet, ops.time)))
+	_, err = a.Write([]byte(a.formatLineProtocol(prefix, tags, fieldSet, ops.time)))
 	return err
 }
 
@@ -149,12 +153,22 @@ func (a *Encoder) EncodeWithoutTypes(prefix string, val interface{}, tags map[st
 // EncodeMap writes the line protocol representation for a given measurement
 // name, field value map and tag map to the io.Writer specified on encoder
 // creation.
-func (a *Encoder) EncodeMap(prefix string, val map[string]string, tags map[string]string, opts ...Option) error {
+func (a *Encoder) EncodeMap(prefix string, val map[string]interface{}, tags map[string]string, opts ...Option) error {
 	var ops options
 	for _, o := range opts {
 		o(&ops)
 	}
-	_, err := a.Writer.Write([]byte(a.formatLineProtocol(prefix, tags, val, ops.time)))
+
+	var err error
+	fieldSet := make(map[string]string, len(val))
+	for k, v := range val {
+		fieldSet[k], err = toInfluxRepr(prefix, v, false)
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = a.Write([]byte(a.formatLineProtocol(prefix, tags, fieldSet, ops.time)))
 	return err
 }
 
